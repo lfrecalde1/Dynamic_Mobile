@@ -1,0 +1,266 @@
+%% Identification
+clc, clear all, close all;
+
+
+%% Load Data
+load("DatosExp01.mat");
+
+
+%% TIME
+t;
+dt_time = 0.1;
+ts = 0.1;
+N = length(t);
+
+
+u_ref = DatosConv(:,1);
+w_ref = DatosConv(:,2);
+
+%% Split Values
+u = DatosConv(:,3);
+w = DatosConv(:,4);
+
+
+%% Derivative
+up = [0 , diff(u)'/ts];
+wp = [0 , diff(w)'/ts];
+
+%% Desired Values and real Vector
+vref = [u_ref';w_ref'];
+v = [u';w'];
+
+landa = 2;
+F1=tf(landa,[1 landa]);
+
+%% Filter Signals
+u_ref_f = lsim(F1,u_ref,t)';
+w_ref_f = lsim(F1,w_ref,t)';
+
+u_f =  lsim(F1,u,t)';
+w_f =  lsim(F1,w,t)';
+
+up_f = lsim(F1, up,t)';
+wp_f = lsim(F1, wp,t)';
+
+%% Filter signals Vector
+
+vref_f = [u_ref_f; w_ref_f];
+v_f = [u_f; w_f];
+vp_f = [up_f; wp_f];
+
+N = length(t);
+%% Optimization
+options = optimoptions(@fmincon,'Algorithm','interior-point'); 
+options.MaxFunctionEvaluations = 50000;   
+rng default;
+ms = MultiStart('FunctionTolerance',2e-4,'UseParallel',true);
+gs = GlobalSearch(ms);
+
+%% INITIAL VALUES
+chi = zeros(6,1);
+f_obj1 = @(x)  cost_func_dynamic(x, vref_f, vp_f, v_f, N);
+% problem = fmincon(f_obj1,chi,[],[],[],[],[],[],[],options);
+problem = createOptimProblem('fmincon','objective',...
+    f_obj1,'x0',chi,'lb',[],'ub',[],'options',options);
+[x, f] = run(gs, problem);
+values_final = x;
+
+%% Validation
+v_estimate(:, 1) = [v(:,1)];
+uref = [vref];
+
+for k = 1:length(t)-1
+    v_estimate(:, k+1) = f_dynamic(x, v_estimate(:, k), uref(:, k), ts);
+end
+
+%% Color Palette
+c1 = [80, 81, 79]/255;
+c2 = [244, 213, 141]/255;
+c3 = [242, 95, 92]/255;
+c4 = [112, 141, 129]/255;
+
+C18 = [0 0 0];
+c5 = [130, 37, 37]/255;
+c6 = [205, 167, 37]/255;
+c7 = [81, 115, 180]/255;
+
+C1 = [246 170 141]/255;
+C2 = [51 187 238]/255;
+C3 = [0 153 136]/255;
+C4 = [238 119 51]/255;
+C5 = [204 51 17]/255;
+C6 = [238 51 119]/255;
+C7 = [187 187 187]/255;
+C8 = [80 80 80]/255;
+C9 = [140 140 140]/255;
+C10 = [0 128 255]/255;
+C11 = [234 52 89]/255;
+C12 = [39 124 252]/255;
+C13 = [40 122 125]/255;
+%C14 = [86 215 219]/255;
+C14 = [252 94 158]/255;
+C15 = [244 171 39]/255;
+C16 = [100 121 162]/255;
+C17 = [255 0 0]/255;
+
+
+%% Values plot
+lw = 1; 
+lwV = 2; 
+fontsizeLabel = 11; 
+fontsizeLegend = 11;
+fontsizeTicks = 11;
+fontsizeTitel = 11;
+sizeX = 1300; 
+sizeY = 750; 
+
+figure('Position', [500 500 sizeX sizeY])
+set(gcf, 'Position', [500 500 sizeX sizeY]);
+fig1_comps.fig = gcf;
+
+%% Figure 1 Ul
+axes('Position',[0.04 0.79 .45 .17]);
+%% FRONTAL VELOCITY
+ul = line(t,v(1, :));
+set(ul, 'LineStyle', '-', 'Color', C11, 'LineWidth', 1.1*lw);
+ul_f = line(t,v_f(1,:));
+set(ul_f, 'LineStyle', '--', 'Color', C12, 'LineWidth', 1.1*lw);
+ul_ref = line(t(1:length(u_ref)),vref(1,:));
+set(ul_ref, 'LineStyle', '-.', 'Color', C9, 'LineWidth', 1.3*lw);
+
+
+%% Title of the image
+hTitle_1 = title({'$\textrm{(a)}$'},'fontsize',12,'interpreter','latex','Color',C18);
+%xlabel('$\textrm{Time}[s]$','fontsize',10,'interpreter','latex','Color',C18);
+ylabel('$[m/s]$','fontsize',9,'interpreter','latex', 'Color',C18);
+
+%% Legend nomeclature
+hLegend_1 = legend([ul,ul_f,ul_ref],{'$\mu_{l}$','$\mu_{lf}$','$\mu_{lref}$'},'fontsize',11,'interpreter','latex','Color',[255 255 255]/255,'NumColumns',1,'TextColor','black');
+set(gca,'ticklabelinterpreter','latex',...
+         'fontsize',1.1*fontsizeTicks)
+     
+%% Figure properties
+ax_1 = gca;
+ax_1.Box = 'on';
+ax_1.BoxStyle = 'full';
+ax_1.TickLength = [0.01;0.01];
+ax_1.TickDirMode = 'auto';
+ax_1.XTickLabel = [];
+ax_1.YMinorTick = 'on';
+ax_1.XMinorTick = 'on';
+ax_1.XMinorGrid = 'on';
+ax_1.YMinorGrid = 'on';
+ax_1.MinorGridAlpha = 0.15;
+ax_1.LineWidth = 0.8;
+ax_1.XLim = [0 t(end)];
+
+
+%% Figure 2 UM
+axes('Position',[0.04 0.58 .45 .17]);
+%% FRONTAL VELOCITY
+um = line(t,v(2,:));
+set(um, 'LineStyle', '-', 'Color', C3, 'LineWidth', 1.1*lw);
+um_f = line(t,v_f(2,:));
+set(um_f, 'LineStyle', '--', 'Color', C14, 'LineWidth', 1.1*lw);
+um_ref = line(t(1:length(w_ref)),vref(2,:));
+set(um_ref, 'LineStyle', '-.', 'Color', C9, 'LineWidth', 1.3*lw);
+
+
+%% Title of the image
+%xlabel('$\textrm{Time}[s]$','fontsize',10,'interpreter','latex','Color',C18);
+ylabel('$[m/s]$','fontsize',9,'interpreter','latex', 'Color',C18);
+
+%% Legend nomeclature
+hLegend_2 = legend([um, um_f, um_ref],{'$\mu_{m}$','$\mu_{mf}$','$\mu_{mref}$'},'fontsize',11,'interpreter','latex','Color',[255 255 255]/255,'NumColumns',1,'TextColor','black');
+set(gca,'ticklabelinterpreter','latex',...
+    'fontsize',1.1*fontsizeTicks)
+%% Figure properties
+ax_2 = gca;
+ax_2.Box = 'on';
+ax_2.BoxStyle = 'full';
+ax_2.TickLength = [0.01;0.01];
+ax_2.TickDirMode = 'auto';
+ax_2.XTickLabel = [];
+ax_2.YMinorTick = 'on';
+ax_2.XMinorTick = 'on';
+ax_2.XMinorGrid = 'on';
+ax_2.YMinorGrid = 'on';
+ax_2.MinorGridAlpha = 0.15;
+ax_2.LineWidth = 0.8;
+ax_2.XLim = [0 t(end)];
+
+
+figure('Position', [500 500 sizeX sizeY])
+set(gcf, 'Position', [500 500 sizeX sizeY]);
+fig1_comps.fig = gcf;
+
+%% Figure 1 Ul
+axes('Position',[0.04 0.79 .45 .17]);
+%% FRONTAL VELOCITY
+ul = line(t,v(1, :));
+set(ul, 'LineStyle', '-', 'Color', C11, 'LineWidth', 1.1*lw);
+ul_f = line(t,v_estimate(1,:));
+set(ul_f, 'LineStyle', '--', 'Color', C12, 'LineWidth', 1.1*lw);
+ul_ref = line(t(1:length(u_ref)),vref(1,:));
+set(ul_ref, 'LineStyle', '-.', 'Color', C9, 'LineWidth', 1.3*lw);
+
+
+%% Title of the image
+hTitle_1 = title({'$\textrm{(a)}$'},'fontsize',12,'interpreter','latex','Color',C18);
+%xlabel('$\textrm{Time}[s]$','fontsize',10,'interpreter','latex','Color',C18);
+ylabel('$[m/s]$','fontsize',9,'interpreter','latex', 'Color',C18);
+
+%% Legend nomeclature
+hLegend_1 = legend([ul,ul_f,ul_ref],{'$\mu_{l}$','$\mu_{lf}$','$\mu_{lref}$'},'fontsize',11,'interpreter','latex','Color',[255 255 255]/255,'NumColumns',1,'TextColor','black');
+set(gca,'ticklabelinterpreter','latex',...
+         'fontsize',1.1*fontsizeTicks)
+     
+%% Figure properties
+ax_1 = gca;
+ax_1.Box = 'on';
+ax_1.BoxStyle = 'full';
+ax_1.TickLength = [0.01;0.01];
+ax_1.TickDirMode = 'auto';
+ax_1.XTickLabel = [];
+ax_1.YMinorTick = 'on';
+ax_1.XMinorTick = 'on';
+ax_1.XMinorGrid = 'on';
+ax_1.YMinorGrid = 'on';
+ax_1.MinorGridAlpha = 0.15;
+ax_1.LineWidth = 0.8;
+ax_1.XLim = [0 t(end)];
+
+
+%% Figure 2 UM
+axes('Position',[0.04 0.58 .45 .17]);
+%% FRONTAL VELOCITY
+um = line(t,v(2,:));
+set(um, 'LineStyle', '-', 'Color', C3, 'LineWidth', 1.1*lw);
+um_f = line(t,v_estimate(2,:));
+set(um_f, 'LineStyle', '--', 'Color', C14, 'LineWidth', 1.1*lw);
+um_ref = line(t(1:length(w_ref)),vref(2,:));
+set(um_ref, 'LineStyle', '-.', 'Color', C9, 'LineWidth', 1.3*lw);
+
+
+%% Title of the image
+%xlabel('$\textrm{Time}[s]$','fontsize',10,'interpreter','latex','Color',C18);
+ylabel('$[m/s]$','fontsize',9,'interpreter','latex', 'Color',C18);
+
+%% Legend nomeclature
+hLegend_2 = legend([um, um_f, um_ref],{'$\mu_{m}$','$\mu_{mf}$','$\mu_{mref}$'},'fontsize',11,'interpreter','latex','Color',[255 255 255]/255,'NumColumns',1,'TextColor','black');
+set(gca,'ticklabelinterpreter','latex',...
+    'fontsize',1.1*fontsizeTicks)
+%% Figure properties
+ax_2 = gca;
+ax_2.Box = 'on';
+ax_2.BoxStyle = 'full';
+ax_2.TickLength = [0.01;0.01];
+ax_2.TickDirMode = 'auto';
+ax_2.XTickLabel = [];
+ax_2.YMinorTick = 'on';
+ax_2.XMinorTick = 'on';
+ax_2.XMinorGrid = 'on';
+ax_2.YMinorGrid = 'on';
+ax_2.MinorGridAlpha = 0.15;
+ax_2.LineWidth = 0.8;
+ax_2.XLim = [0 t(end)];
